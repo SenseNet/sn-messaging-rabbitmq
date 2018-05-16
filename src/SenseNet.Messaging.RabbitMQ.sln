@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 15
+VisualStudioVersion = 15.0.27130.2036
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SenseNet.Messaging.RabbitMQ", "SenseNet.Messaging.RabbitMQ\SenseNet.Messaging.RabbitMQ.csproj", "{646A5E00-56F8-46EF-9C0C-4D2AFEDB291F}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{646A5E00-56F8-46EF-9C0C-4D2AFEDB291F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{646A5E00-56F8-46EF-9C0C-4D2AFEDB291F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{646A5E00-56F8-46EF-9C0C-4D2AFEDB291F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{646A5E00-56F8-46EF-9C0C-4D2AFEDB291F}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {B934F44B-4419-43D7-9056-7EDCC7CC33BC}
+	EndGlobalSection
+EndGlobal
