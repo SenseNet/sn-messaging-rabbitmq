@@ -118,20 +118,10 @@ namespace SenseNet.Messaging.RabbitMQ
                 // between threads and be able to dispose the object.
                 try
                 {
-                    using (var op1 = SnTrace.Messaging.StartOperation("InternalSend"))
+                    using (var channel = OpenChannel(Connection))
                     {
-                        using (var channel = OpenChannel(Connection))
-                        {
-                            using (var op2 = SnTrace.Messaging.StartOperation("BasicPublish"))
-                            {
-                                channel.BasicPublish(Configuration.RabbitMQ.MessageExchange, string.Empty, null, body);
-                                op2.Successful = true;
-                            }
-
-                            channel.Close();
-                        }
-
-                        op1.Successful = true;
+                        channel.BasicPublish(Configuration.RabbitMQ.MessageExchange, string.Empty, null, body);
+                        channel.Close();
                     }
                 }
                 catch (Exception ex)
@@ -152,8 +142,6 @@ namespace SenseNet.Messaging.RabbitMQ
                 SnLog.WriteException(args.Exception);
                 SnTrace.Messaging.WriteError($"RMQ: RabbitMQ channel callback exception: {args.Exception?.Message}");
             };
-
-            SnTrace.Messaging.Write("RMQ: RabbitMQ channel opened.");
 
             return channel;
         }
