@@ -18,13 +18,15 @@ namespace SenseNet.Messaging.RabbitMQ
 
         //=================================================================================== Shared recources
 
-        private IConnection Connection { get; } = OpenConnection();
+        private IConnection Connection { get; set; }
         private IModel ReceiverChannel { get; set; }
 
         //=================================================================================== Overrides
 
         protected override void StartMessagePump()
         {
+            Connection = OpenConnection();
+
             string queueName;
             
             try
@@ -78,6 +80,7 @@ namespace SenseNet.Messaging.RabbitMQ
         protected override void StopMessagePump()
         {
             ReceiverChannel?.Close();
+            Connection?.Close();
 
             base.StopMessagePump();
         }
