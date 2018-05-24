@@ -132,7 +132,7 @@ namespace SenseNet.Messaging.RabbitMQ
                     SnLog.WriteException(ex);
                     SnTrace.Messaging.WriteError($"SEND ERROR {ex.Message}");
                 }
-            });
+            }).ConfigureAwait(false);
         }
 
         //=================================================================================== Helper methods
