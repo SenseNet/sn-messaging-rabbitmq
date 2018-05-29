@@ -15,6 +15,7 @@
     <tags>sensenet messaging rabbitmq</tags>
     <dependencies>
       <dependency id="SenseNet.Services" version="7.1.2" />
+      <dependency id="RabbitMQ.Client" version="5.0.1" />
     </dependencies>
   </metadata>
   <files>
