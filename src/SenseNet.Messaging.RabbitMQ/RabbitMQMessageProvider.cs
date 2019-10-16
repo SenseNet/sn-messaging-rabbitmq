@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using SenseNet.Diagnostics;
+using System.Threading;
 
 namespace SenseNet.Messaging.RabbitMQ
 {
@@ -23,7 +24,7 @@ namespace SenseNet.Messaging.RabbitMQ
 
         //=================================================================================== Overrides
 
-        protected override void StartMessagePump()
+        protected override Task StartMessagePumpAsync(CancellationToken cancellationToken)
         {
             Connection = OpenConnection();
 
@@ -75,30 +76,31 @@ namespace SenseNet.Messaging.RabbitMQ
                     { "QueueName", queueName }
                 });
 
-            base.StartMessagePump();
+            return base.StartMessagePumpAsync(cancellationToken);
         }
-        protected override void StopMessagePump()
+        protected override Task StopMessagePumpAsync(CancellationToken cancellationToken)
         {
             ReceiverChannel?.Close();
             Connection?.Close();
 
-            base.StopMessagePump();
+            return base.StopMessagePumpAsync(cancellationToken);
         }
 
         public override string ReceiverName { get; } = "RabbitMQ";
 
         public override bool RestartingAllChannels => false;
-        public override void RestartAllChannels()
+        public override Task RestartAllChannelsAsync(CancellationToken cancellationToken)
         {
             SnTrace.Messaging.Write("RMQ: RabbitMQ RestartAllChannels does nothing.");
+            return Task.CompletedTask;
         }
-        
-        protected override void InternalSend(Stream messageBody, bool isDebugMessage)
+
+        protected override Task InternalSendAsync(Stream messageBody, bool isDebugMessage, CancellationToken cancellationToken)
         {
             if (messageBody?.Length == 0)
             {
                 SnTrace.Messaging.WriteError("RMQ: Empty message body.");
-                return;
+                return Task.CompletedTask;
             }
 
             byte[] body;
@@ -133,6 +135,8 @@ namespace SenseNet.Messaging.RabbitMQ
                     SnTrace.Messaging.WriteError($"SEND ERROR {ex.Message}");
                 }
             }).ConfigureAwait(false);
+
+            return Task.CompletedTask;
         }
 
         //=================================================================================== Helper methods
