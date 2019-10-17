@@ -17,7 +17,7 @@ namespace SenseNet.Messaging.RabbitMQ
 
         public RabbitMQMessageProvider(IClusterMessageFormatter formatter, ClusterMemberInfo memberInfo) : base(formatter, memberInfo) { }
 
-        //=================================================================================== Shared recources
+        //=================================================================================== Shared resources
 
         private IConnection Connection { get; set; }
         private IModel ReceiverChannel { get; set; }
@@ -117,6 +117,7 @@ namespace SenseNet.Messaging.RabbitMQ
                 }
             }
 
+            // we do not have to wait for the publish operation to finish
             Task.Run(() =>
             {
                 // Create a channel per send request to avoid sharing channels 
