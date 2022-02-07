@@ -1,21 +1,30 @@
 ﻿using System;
-using System.Collections.Generic;
 using SenseNet.Communication.Messaging;
 using System.IO;
 using System.Threading.Tasks;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
-using SenseNet.Diagnostics;
 using System.Threading;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using SenseNet.Messaging.RabbitMQ.Configuration;
 
 namespace SenseNet.Messaging.RabbitMQ
 {
     // ReSharper disable once InconsistentNaming
     public class RabbitMQMessageProvider : ClusterChannel
     {
+        private readonly ILogger<RabbitMQMessageProvider> _logger;
+        private readonly RabbitMqOptions _options;
+
         //=================================================================================== Constructors
 
-        public RabbitMQMessageProvider(IClusterMessageFormatter formatter, ClusterMemberInfo memberInfo) : base(formatter, memberInfo) { }
+        public RabbitMQMessageProvider(IClusterMessageFormatter formatter, IOptions<ClusterMemberInfo> memberInfo,
+            IOptions<RabbitMqOptions> options, ILogger<RabbitMQMessageProvider> logger) : base(formatter, memberInfo.Value)
+        {
+            _logger = logger;
+            _options = options.Value;
+        }
 
         //=================================================================================== Shared resources
 
@@ -35,20 +44,20 @@ namespace SenseNet.Messaging.RabbitMQ
                 // declare an exchange and bind a queue unique for this application
                 using (var initChannel = OpenChannel(Connection))
                 {
-                    initChannel.ExchangeDeclare(Configuration.RabbitMQ.MessageExchange, "fanout");
+                    initChannel.ExchangeDeclare(_options.MessageExchange, "fanout");
 
                     // let the server generate a unique queue name
                     queueName = initChannel.QueueDeclare().QueueName;
-                    SnTrace.Messaging.Write($"RMQ: RabbitMQ queue declared: {queueName}");
+                    _logger.LogTrace($"RMQ: RabbitMQ queue declared: {queueName}");
 
-                    initChannel.QueueBind(queueName, Configuration.RabbitMQ.MessageExchange, string.Empty);
+                    initChannel.QueueBind(queueName, _options.MessageExchange, string.Empty);
 
-                    SnTrace.Messaging.Write($"RMQ: RabbitMQ queue {queueName} is bound to exchange {Configuration.RabbitMQ.MessageExchange}.");
+                    _logger.LogTrace($"RMQ: RabbitMQ queue {queueName} is bound to exchange {_options.MessageExchange}.");
                 }
             }
             catch (Exception ex)
             {
-                SnLog.WriteException(ex, $"RabbitMQ message provider connection error. Service url: {Configuration.RabbitMQ.ServiceUrl}");
+                _logger.LogError(ex, $"RabbitMQ message provider connection error. Service url: {_options.ServiceUrl}");
                 throw;
             }
 
@@ -56,8 +65,8 @@ namespace SenseNet.Messaging.RabbitMQ
             ReceiverChannel = OpenChannel(Connection);
 
             var consumer = new EventingBasicConsumer(ReceiverChannel);
-            consumer.Shutdown += (sender, args) => { SnTrace.Messaging.Write("RMQ: RabbitMQ consumer shutdown."); };
-            consumer.ConsumerCancelled += (sender, args) => { SnTrace.Messaging.Write("RMQ: RabbitMQ consumer cancelled."); };
+            consumer.Shutdown += (sender, args) => { _logger.LogTrace("RMQ: RabbitMQ consumer shutdown."); };
+            consumer.ConsumerCancelled += (sender, args) => { _logger.LogTrace("RMQ: RabbitMQ consumer cancelled."); };
             consumer.Received += (model, args) =>
             {
                 // this is the main entry point for receiving messages
@@ -69,12 +78,8 @@ namespace SenseNet.Messaging.RabbitMQ
 
             ReceiverChannel.BasicConsume(queueName, true, consumer);
 
-            SnLog.WriteInformation($"RabbitMQ message provider connected to {Configuration.RabbitMQ.ServiceUrl}",
-                properties: new Dictionary<string, object>
-                {
-                    { "Exchange", Configuration.RabbitMQ.MessageExchange },
-                    { "QueueName", queueName }
-                });
+            _logger.LogInformation($"RabbitMQ message provider connected to {_options.ServiceUrl}. " +
+                                   $"Exchange: {_options.MessageExchange}. Queuename: {queueName}");
 
             return base.StartMessagePumpAsync(cancellationToken);
         }
@@ -91,7 +96,7 @@ namespace SenseNet.Messaging.RabbitMQ
         public override bool RestartingAllChannels => false;
         public override Task RestartAllChannelsAsync(CancellationToken cancellationToken)
         {
-            SnTrace.Messaging.Write("RMQ: RabbitMQ RestartAllChannels does nothing.");
+            _logger.LogTrace("RMQ: RabbitMQ RestartAllChannels does nothing.");
             return Task.CompletedTask;
         }
 
@@ -99,7 +104,7 @@ namespace SenseNet.Messaging.RabbitMQ
         {
             if (messageBody?.Length == 0)
             {
-                SnTrace.Messaging.WriteError("RMQ: Empty message body.");
+                _logger.LogTrace("RMQ: Empty message body.");
                 return Task.CompletedTask;
             }
 
@@ -126,14 +131,13 @@ namespace SenseNet.Messaging.RabbitMQ
                 {
                     using (var channel = OpenChannel(Connection))
                     {
-                        channel.BasicPublish(Configuration.RabbitMQ.MessageExchange, string.Empty, null, body);
+                        channel.BasicPublish(_options.MessageExchange, string.Empty, null, body);
                         channel.Close();
                     }
                 }
                 catch (Exception ex)
                 {
-                    SnLog.WriteException(ex);
-                    SnTrace.Messaging.WriteError($"SEND ERROR {ex.Message}");
+                    _logger.LogError(ex, $"Error when sending message on RabbitMq channel: {ex.Message}");
                 }
             }).ConfigureAwait(false);
 
@@ -142,29 +146,33 @@ namespace SenseNet.Messaging.RabbitMQ
 
         //=================================================================================== Helper methods
 
-        private static IModel OpenChannel(IConnection connection)
+        private IModel OpenChannel(IConnection connection)
         {
+            if (connection == null)
+            {
+                _logger.LogError("RabbitMq connection is null.");
+                throw new ArgumentNullException(nameof(connection));
+            }
+
             var channel = connection.CreateModel();
             channel.CallbackException += (sender, args) =>
             {
-                SnLog.WriteException(args.Exception);
-                SnTrace.Messaging.WriteError($"RMQ: RabbitMQ channel callback exception: {args.Exception?.Message}");
+                _logger.LogError(args.Exception, $"RMQ: RabbitMQ channel callback exception: {args.Exception?.Message}");
             };
 
             return channel;
         }
-        private static IConnection OpenConnection()
+        private IConnection OpenConnection()
         {
-            var factory = new ConnectionFactory { Uri = new Uri(Configuration.RabbitMQ.ServiceUrl) };
+            var factory = new ConnectionFactory { Uri = new Uri(_options.ServiceUrl) };
             var connection = factory.CreateConnection();
             connection.CallbackException += (sender, ea) =>
             {
-                SnLog.WriteException(ea.Exception);
-                SnTrace.Messaging.WriteError($"RMQ: RabbitMQ connection callback exception: {ea.Exception?.Message}");
+                _logger.LogError(ea.Exception, $"RMQ: RabbitMQ connection callback exception: {ea.Exception?.Message}");
             };
             connection.ConnectionShutdown += (sender, ea) =>
             {
-                SnTrace.Messaging.Write("RMQ: RabbitMQ connection shutdown.");
+                _logger.LogTrace("RMQ: RabbitMQ connection shutdown.");
             };
 
             return connection;
