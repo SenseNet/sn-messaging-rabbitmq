@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
-    <Version>1.1.0.1</Version>
+    <Version>1.1.1</Version>
     <Authors>kavics,tusmester,plastic</Authors>
     <Company>Sense/Net Inc.</Company>
     <Product>sensenet RabbitMQ messaging provider</Product>
@@ -20,7 +20,7 @@
 
   <ItemGroup>
     <PackageReference Include="SenseNet.Tools" Version="3.2.7" />
-    <PackageReference Include="SenseNet.ContentRepository" Version="7.7.31.1" />
+    <PackageReference Include="SenseNet.ContentRepository" Version="7.7.32" />
     <PackageReference Include="RabbitMQ.Client" Version="5.0.1" />
   </ItemGroup>
 
