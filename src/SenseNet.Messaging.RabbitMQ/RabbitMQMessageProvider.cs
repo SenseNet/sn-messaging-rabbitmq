@@ -8,6 +8,7 @@ using System.Threading;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using SenseNet.Messaging.RabbitMQ.Configuration;
+using System.Threading.Channels;
 
 namespace SenseNet.Messaging.RabbitMQ
 {
@@ -85,8 +86,15 @@ namespace SenseNet.Messaging.RabbitMQ
         }
         protected override Task StopMessagePumpAsync(CancellationToken cancellationToken)
         {
-            ReceiverChannel?.Close();
-            Connection?.Close();
+            try
+            {
+                ReceiverChannel?.Close();
+                Connection?.Close();
+            }
+            catch (ChannelClosedException ex)
+            {
+                _logger.LogTrace($"RabbitMQ channel closed with an exception: {ex.Message}");
+            }
 
             return base.StopMessagePumpAsync(cancellationToken);
         }
