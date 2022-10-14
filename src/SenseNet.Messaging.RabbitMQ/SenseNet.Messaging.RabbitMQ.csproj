@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>netstandard2.0</TargetFramework>
+	<TargetFrameworks>netstandard2.0;net6.0</TargetFrameworks>
     <Version>1.1.1</Version>
     <Authors>kavics,tusmester,plastic</Authors>
     <Company>Sense/Net Inc.</Company>
@@ -20,8 +20,9 @@
 
   <ItemGroup>
     <PackageReference Include="SenseNet.Tools" Version="3.2.7" />
-    <PackageReference Include="SenseNet.ContentRepository" Version="7.7.32" />
+    <PackageReference Include="SenseNet.ContentRepository" Version="7.7.33.6" />
     <PackageReference Include="RabbitMQ.Client" Version="5.0.1" />
+    <PackageReference Include="System.Threading.Channels" Version="6.0.0" />
   </ItemGroup>
 
 </Project>
