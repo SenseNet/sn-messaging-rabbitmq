@@ -120,29 +120,38 @@ namespace SenseNet.Messaging.RabbitMQ
 
         protected override Task InternalSendAsync(Stream messageBody, bool isDebugMessage, CancellationToken cancel)
         {
-            if (messageBody?.Length == 0)
+            byte[] body;
+
+            try
             {
-                _logger.LogTrace("RMQ: Empty message body.");
+                if (messageBody?.Length == 0)
+                {
+                    _logger.LogTrace("RMQ: Empty message body.");
+                    return Task.CompletedTask;
+                }
+                
+                if (messageBody is MemoryStream ms)
+                {
+                    body = ms.ToArray();
+                }
+                else
+                {
+                    using (var memoryStream = new MemoryStream())
+                    {
+                        messageBody?.CopyTo(memoryStream);
+                        body = memoryStream.ToArray();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error when converting message body to a byte array. {ex.Message}");
                 return Task.CompletedTask;
             }
 
-            byte[] body;
-            if (messageBody is MemoryStream ms)
-            {
-                body = ms.ToArray();
-            }
-            else
-            {
-                using (var memoryStream = new MemoryStream())
-                {
-                    messageBody?.CopyTo(memoryStream);
-                    body = memoryStream.ToArray();
-                }
-            }
-
-            // we do not have to wait for the publish operation to finish
-            Task.Run(() =>
-            {
+            //// we do not have to wait for the publish operation to finish
+            //Task.Run(() =>
+            //{
                 // Create a channel per send request to avoid sharing channels 
                 // between threads and be able to dispose the object.
                 try
@@ -159,7 +168,7 @@ namespace SenseNet.Messaging.RabbitMQ
                 {
                     _logger.LogError(ex, $"Error when sending message on RabbitMq channel: {ex.Message}");
                 }
-            }, cancel).ConfigureAwait(false);
+            //}, cancel).ConfigureAwait(false);
 
             return Task.CompletedTask;
         }
