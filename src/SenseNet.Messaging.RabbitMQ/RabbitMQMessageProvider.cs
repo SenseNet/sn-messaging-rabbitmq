@@ -36,7 +36,15 @@ namespace SenseNet.Messaging.RabbitMQ
 
         protected override Task StartMessagePumpAsync(CancellationToken cancellationToken)
         {
-            Connection = OpenConnection();
+            try
+            {
+                Connection = OpenConnection();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error opening connection in RabbitMQ message provider. {ex.Message}");
+                return Task.CompletedTask;
+            }
 
             string queueName;
             
@@ -70,6 +78,8 @@ namespace SenseNet.Messaging.RabbitMQ
             consumer.ConsumerCancelled += (sender, args) => { _logger.LogTrace("RMQ: RabbitMQ consumer cancelled."); };
             consumer.Received += (model, args) =>
             {
+                _logger.LogTrace($"Message received. Length: {args?.Body?.Length ?? 0}");
+
                 // this is the main entry point for receiving messages
                 using (var ms = new MemoryStream(args.Body))
                 {
@@ -108,7 +118,7 @@ namespace SenseNet.Messaging.RabbitMQ
             return Task.CompletedTask;
         }
 
-        protected override Task InternalSendAsync(Stream messageBody, bool isDebugMessage, CancellationToken cancellationToken)
+        protected override Task InternalSendAsync(Stream messageBody, bool isDebugMessage, CancellationToken cancel)
         {
             if (messageBody?.Length == 0)
             {
@@ -137,6 +147,8 @@ namespace SenseNet.Messaging.RabbitMQ
                 // between threads and be able to dispose the object.
                 try
                 {
+                    _logger.LogTrace($"RMQ: Publishing message. Length: {body.Length}");
+
                     using (var channel = OpenChannel(Connection))
                     {
                         channel.BasicPublish(_options.MessageExchange, string.Empty, null, body);
@@ -147,7 +159,7 @@ namespace SenseNet.Messaging.RabbitMQ
                 {
                     _logger.LogError(ex, $"Error when sending message on RabbitMq channel: {ex.Message}");
                 }
-            }).ConfigureAwait(false);
+            }, cancel).ConfigureAwait(false);
 
             return Task.CompletedTask;
         }
