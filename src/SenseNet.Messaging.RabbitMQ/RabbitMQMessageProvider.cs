@@ -78,10 +78,15 @@ namespace SenseNet.Messaging.RabbitMQ
             consumer.ConsumerCancelled += (sender, args) => { _logger.LogTrace("RMQ: RabbitMQ consumer cancelled."); };
             consumer.Received += (model, args) =>
             {
-                _logger.LogTrace($"Message received. Length: {args?.Body?.Length ?? 0}");
+                var messageLength = args?.Body.Length ?? 0;
+                
+                _logger.LogTrace($"Message received. Length: {messageLength}");
+
+                if (messageLength == 0)
+                    return;
 
                 // this is the main entry point for receiving messages
-                using (var ms = new MemoryStream(args.Body))
+                using (var ms = new MemoryStream(args.Body.ToArray()))
                 {
                     OnMessageReceived(ms);
                 }
