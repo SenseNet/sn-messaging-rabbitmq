@@ -25,7 +25,9 @@ To get started, install the following NuGet package:
 
 > This is a dll-ony package, not a full sensenet component, so you only have to install the package above in Visual Studio and configure your instance.
 
-## Configuration
+## Configuration (LEGACY)
+> This section is about the legacy .Net Framework `web.config` configuration. Please note that this is not supported in .Net Core, please use the new configuration method described in the [new docs](https://docs.sensenet.com).
+
 ### Messaging provider
 You have to tell sensenet that you intend to use this library as the message provider. You'll do this by defining the cluster channel provider in web.config (or any other .Net config file you have):
 
