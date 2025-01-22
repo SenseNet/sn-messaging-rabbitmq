@@ -1,9 +1,11 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 15
-VisualStudioVersion = 15.0.27130.2036
+# Visual Studio Version 17
+VisualStudioVersion = 17.12.35527.113 d17.12
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SenseNet.Messaging.RabbitMQ", "SenseNet.Messaging.RabbitMQ\SenseNet.Messaging.RabbitMQ.csproj", "{646A5E00-56F8-46EF-9C0C-4D2AFEDB291F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Tester", "Tester\Tester.csproj", "{EE5601B1-1690-4A64-B7B7-E260A5F090FB}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -15,6 +17,10 @@ Global
 		{646A5E00-56F8-46EF-9C0C-4D2AFEDB291F}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{646A5E00-56F8-46EF-9C0C-4D2AFEDB291F}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{646A5E00-56F8-46EF-9C0C-4D2AFEDB291F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EE5601B1-1690-4A64-B7B7-E260A5F090FB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EE5601B1-1690-4A64-B7B7-E260A5F090FB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EE5601B1-1690-4A64-B7B7-E260A5F090FB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EE5601B1-1690-4A64-B7B7-E260A5F090FB}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
