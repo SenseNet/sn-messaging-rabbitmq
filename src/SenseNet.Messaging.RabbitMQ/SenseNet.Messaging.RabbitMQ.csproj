@@ -22,7 +22,7 @@
 
   <ItemGroup>
     <PackageReference Include="SenseNet.Tools" Version="3.2.13.1" />
-    <PackageReference Include="SenseNet.ContentRepository" Version="7.7.42.1" />
+    <PackageReference Include="SenseNet.ContentRepository" Version="7.7.42.2" />
     <PackageReference Include="RabbitMQ.Client" Version="7.0.0" />
     <PackageReference Include="System.Threading.Channels" Version="9.0.1" />
     <PackageReference Include="System.Diagnostics.EventLog" Version="9.0.1" />
