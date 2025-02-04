@@ -30,20 +30,20 @@ namespace SenseNet.Messaging.RabbitMQ
         //=================================================================================== Shared resources
 
         private IConnection Connection { get; set; }
-        private IModel ReceiverChannel { get; set; }
+        private IChannel ReceiverChannel { get; set; }
 
         //=================================================================================== Overrides
 
-        protected override Task StartMessagePumpAsync(CancellationToken cancellationToken)
+        protected override async Task StartMessagePumpAsync(CancellationToken cancellationToken)
         {
             try
             {
-                Connection = OpenConnection();
+                Connection = await OpenConnectionAsync(cancellationToken);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, $"Error opening connection in RabbitMQ message provider. {ex.Message}");
-                return Task.CompletedTask;
+                return;
             }
 
             string queueName;
@@ -51,15 +51,16 @@ namespace SenseNet.Messaging.RabbitMQ
             try
             {
                 // declare an exchange and bind a queue unique for this application
-                using (var initChannel = OpenChannel(Connection))
+                using (var initChannel = await OpenChannelAsync(Connection, cancellationToken))
                 {
-                    initChannel.ExchangeDeclare(_options.MessageExchange, "fanout");
+                    await initChannel.ExchangeDeclareAsync(_options.MessageExchange, "fanout",
+                        cancellationToken: cancellationToken);
 
                     // let the server generate a unique queue name
-                    queueName = initChannel.QueueDeclare().QueueName;
+                    queueName = (await initChannel.QueueDeclareAsync(cancellationToken: cancellationToken)).QueueName;
                     _logger.LogTrace($"RMQ: RabbitMQ queue declared: {queueName}");
 
-                    initChannel.QueueBind(queueName, _options.MessageExchange, string.Empty);
+                    await initChannel.QueueBindAsync(queueName, _options.MessageExchange, string.Empty, cancellationToken: cancellationToken);
 
                     _logger.LogTrace($"RMQ: RabbitMQ queue {queueName} is bound to exchange {_options.MessageExchange}.");
                 }
@@ -71,50 +72,54 @@ namespace SenseNet.Messaging.RabbitMQ
             }
 
             // use a single channel for receiving messages
-            ReceiverChannel = OpenChannel(Connection);
+            ReceiverChannel = await OpenChannelAsync(Connection, cancellationToken);
 
-            var consumer = new EventingBasicConsumer(ReceiverChannel);
-            consumer.Shutdown += (sender, args) => { _logger.LogTrace("RMQ: RabbitMQ consumer shutdown."); };
-            consumer.ConsumerCancelled += (sender, args) => { _logger.LogTrace("RMQ: RabbitMQ consumer cancelled."); };
-            consumer.Received += (model, args) =>
+            var consumer = new AsyncEventingBasicConsumer(ReceiverChannel);
+            consumer.ShutdownAsync += (_, args) =>
+            {
+                _logger.LogTrace($"RMQ: RabbitMQ consumer shutdown. Cause: {args.Cause ?? "[null]"}");
+                return Task.CompletedTask;
+            };
+            consumer.ReceivedAsync += async (model, args) =>
             {
                 var messageLength = args?.Body.Length ?? 0;
-                
+
                 _logger.LogTrace($"Message received. Length: {messageLength}");
 
                 if (messageLength == 0)
                     return;
 
                 // this is the main entry point for receiving messages
-                using (var ms = new MemoryStream(args.Body.ToArray()))
-                {
-                    OnMessageReceived(ms);
-                }
+                var body = args.Body.ToArray();
+                using var ms = new MemoryStream(body);
+                OnMessageReceived(ms);
             };
 
-            ReceiverChannel.BasicConsume(queueName, true, consumer);
+            await ReceiverChannel.BasicConsumeAsync(queueName, true, consumer, cancellationToken: cancellationToken);
 
             _logger.LogInformation($"RabbitMQ message provider connected to {_options.ServiceUrl}. " +
-                                   $"Exchange: {_options.MessageExchange}. Queuename: {queueName}");
+                                   $"Exchange: {_options.MessageExchange}. QueueName: {queueName}");
 
-            return base.StartMessagePumpAsync(cancellationToken);
+            await base.StartMessagePumpAsync(cancellationToken);
         }
-        protected override Task StopMessagePumpAsync(CancellationToken cancellationToken)
+        protected override async Task StopMessagePumpAsync(CancellationToken cancellationToken)
         {
             try
             {
-                ReceiverChannel?.Close();
-                Connection?.Close();
+                if (ReceiverChannel != null)
+                    await ReceiverChannel.CloseAsync(cancellationToken: cancellationToken);
+                if(Connection != null)
+                    await Connection.CloseAsync(cancellationToken: cancellationToken);
             }
             catch (ChannelClosedException ex)
             {
                 _logger.LogTrace($"RabbitMQ channel closed with an exception: {ex.Message}");
             }
 
-            return base.StopMessagePumpAsync(cancellationToken);
+            await base.StopMessagePumpAsync(cancellationToken);
         }
 
-        public override string ReceiverName { get; } = "RabbitMQ";
+        public override string ReceiverName => "RabbitMQ";
 
         public override bool RestartingAllChannels => false;
         public override Task RestartAllChannelsAsync(CancellationToken cancellationToken)
@@ -123,7 +128,7 @@ namespace SenseNet.Messaging.RabbitMQ
             return Task.CompletedTask;
         }
 
-        protected override Task InternalSendAsync(Stream messageBody, bool isDebugMessage, CancellationToken cancel)
+        protected override async Task InternalSendAsync(Stream messageBody, bool isDebugMessage, CancellationToken cancel)
         {
             byte[] body;
 
@@ -132,7 +137,7 @@ namespace SenseNet.Messaging.RabbitMQ
                 if (messageBody?.Length == 0)
                 {
                     _logger.LogTrace("RMQ: Empty message body.");
-                    return Task.CompletedTask;
+                    return;
                 }
                 
                 if (messageBody is MemoryStream ms)
@@ -151,36 +156,28 @@ namespace SenseNet.Messaging.RabbitMQ
             catch (Exception ex)
             {
                 _logger.LogError(ex, $"Error when converting message body to a byte array. {ex.Message}");
-                return Task.CompletedTask;
+                return;
             }
 
-            //// we do not have to wait for the publish operation to finish
-            //Task.Run(() =>
-            //{
-                // Create a channel per send request to avoid sharing channels 
-                // between threads and be able to dispose the object.
-                try
-                {
-                    _logger.LogTrace($"RMQ: Publishing message. Length: {body.Length}");
+            // Create a channel per send request to avoid sharing channels 
+            // between threads and be able to dispose the object.
+            try
+            {
+                _logger.LogTrace($"RMQ: Publishing message. Length: {body.Length}");
 
-                    using (var channel = OpenChannel(Connection))
-                    {
-                        channel.BasicPublish(_options.MessageExchange, string.Empty, null, body);
-                        channel.Close();
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, $"Error when sending message on RabbitMq channel: {ex.Message}");
-                }
-            //}, cancel).ConfigureAwait(false);
-
-            return Task.CompletedTask;
+                await using var channel = await OpenChannelAsync(Connection, cancel);
+                await channel.BasicPublishAsync(_options.MessageExchange, string.Empty, body, cancellationToken: cancel);
+                await channel.CloseAsync(cancel);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error when sending message on RabbitMq channel: {ex.Message}");
+            }
         }
 
         //=================================================================================== Helper methods
 
-        private IModel OpenChannel(IConnection connection)
+        private async Task<IChannel> OpenChannelAsync(IConnection connection, CancellationToken cancel)
         {
             if (connection == null)
             {
@@ -188,25 +185,28 @@ namespace SenseNet.Messaging.RabbitMQ
                 throw new ArgumentNullException(nameof(connection));
             }
 
-            var channel = connection.CreateModel();
-            channel.CallbackException += (sender, args) =>
+            var channel = await connection.CreateChannelAsync(cancellationToken: cancel);
+            channel.CallbackExceptionAsync += (_, args) =>
             {
                 _logger.LogError(args.Exception, $"RMQ: RabbitMQ channel callback exception: {args.Exception?.Message}");
+                return Task.CompletedTask;
             };
 
             return channel;
         }
-        private IConnection OpenConnection()
+        private async Task<IConnection> OpenConnectionAsync(CancellationToken cancel)
         {
-            var factory = new ConnectionFactory { Uri = new Uri(_options.ServiceUrl) };
-            var connection = factory.CreateConnection();
-            connection.CallbackException += (sender, ea) =>
+            var factory = new ConnectionFactory { Uri = new Uri(_options.ServiceUrl), ConsumerDispatchConcurrency = 5 };
+            var connection = await factory.CreateConnectionAsync(cancel);
+            connection.CallbackExceptionAsync += (_, ea) =>
             {
                 _logger.LogError(ea.Exception, $"RMQ: RabbitMQ connection callback exception: {ea.Exception?.Message}");
+                return Task.CompletedTask;
             };
-            connection.ConnectionShutdown += (sender, ea) =>
+            connection.ConnectionShutdownAsync += (_, ea) =>
             {
                 _logger.LogTrace("RMQ: RabbitMQ connection shutdown.");
+                return Task.CompletedTask;
             };
 
             return connection;
