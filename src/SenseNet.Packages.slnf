@@ -1,0 +1,8 @@
+{
+  "solution": {
+    "path": "SenseNet.Messaging.RabbitMQ.sln",
+    "projects": [
+      "SenseNet.Messaging.RabbitMQ\\SenseNet.Messaging.RabbitMQ.csproj"
+    ]
+  }
+}
