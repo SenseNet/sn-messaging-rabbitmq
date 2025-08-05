@@ -32,6 +32,10 @@ namespace SenseNet.Messaging.RabbitMQ
         private IConnection Connection { get; set; }
         private IChannel ReceiverChannel { get; set; }
 
+        private static int _activeConnections;
+        private static int _activeChannels;
+
+
         //=================================================================================== Overrides
 
         protected override async Task StartMessagePumpAsync(CancellationToken cancellationToken)
@@ -191,6 +195,15 @@ namespace SenseNet.Messaging.RabbitMQ
                 _logger.LogError(args.Exception, $"RMQ: RabbitMQ channel callback exception: {args.Exception?.Message}");
                 return Task.CompletedTask;
             };
+            channel.ChannelShutdownAsync += (_, args) =>
+            {
+                Interlocked.Decrement(ref _activeChannels);
+                _logger.LogInformation($"Channel closed. Active channels: {_activeChannels}");
+                return Task.CompletedTask;
+            };
+
+            Interlocked.Increment(ref _activeChannels);
+            _logger.LogInformation($"Opening new channel. Active channels: {_activeChannels}");
 
             return channel;
         }
@@ -205,11 +218,17 @@ namespace SenseNet.Messaging.RabbitMQ
             };
             connection.ConnectionShutdownAsync += (_, ea) =>
             {
+                Interlocked.Decrement(ref _activeConnections);
+                _logger.LogInformation($"Connection shutdown. Active connections: {_activeConnections}");
                 _logger.LogTrace("RMQ: RabbitMQ connection shutdown.");
                 return Task.CompletedTask;
             };
 
+            Interlocked.Increment(ref _activeConnections);
+            _logger.LogInformation($"Opening new connection. Active connections: {_activeConnections}");
+
             return connection;
         }
+        public (int Connections, int Channels) GetPoolStatus() => (_activeConnections, _activeChannels);
     }
 }
