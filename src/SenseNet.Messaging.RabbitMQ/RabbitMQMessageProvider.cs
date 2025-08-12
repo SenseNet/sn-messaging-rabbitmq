@@ -13,19 +13,10 @@ using System.Threading.Channels;
 namespace SenseNet.Messaging.RabbitMQ
 {
     // ReSharper disable once InconsistentNaming
-    public class RabbitMQMessageProvider : ClusterChannel
+    public class RabbitMQMessageProvider(IClusterMessageFormatter formatter, IOptions<ClusterMemberInfo> memberInfo,
+        IOptions<RabbitMqOptions> options, ILogger<RabbitMQMessageProvider> _logger) : ClusterChannel(formatter, memberInfo.Value)
     {
-        private readonly ILogger<RabbitMQMessageProvider> _logger;
-        private readonly RabbitMqOptions _options;
-
-        //=================================================================================== Constructors
-
-        public RabbitMQMessageProvider(IClusterMessageFormatter formatter, IOptions<ClusterMemberInfo> memberInfo,
-            IOptions<RabbitMqOptions> options, ILogger<RabbitMQMessageProvider> logger) : base(formatter, memberInfo.Value)
-        {
-            _logger = logger;
-            _options = options.Value;
-        }
+        private readonly RabbitMqOptions _options = options.Value;
 
         //=================================================================================== Shared resources
 
@@ -51,7 +42,7 @@ namespace SenseNet.Messaging.RabbitMQ
             }
 
             string queueName;
-            
+
             try
             {
                 // declare an exchange and bind a queue unique for this application
@@ -102,7 +93,7 @@ namespace SenseNet.Messaging.RabbitMQ
             await ReceiverChannel.BasicConsumeAsync(queueName, true, consumer, cancellationToken: cancellationToken);
 
             _logger.LogInformation($"RabbitMQ message provider connected to {_options.ServiceUrl}. " +
-                                   $"Exchange: {_options.MessageExchange}. QueueName: {queueName}");
+                                         $"Exchange: {_options.MessageExchange}. QueueName: {queueName}");
 
             await base.StartMessagePumpAsync(cancellationToken);
         }
@@ -112,7 +103,7 @@ namespace SenseNet.Messaging.RabbitMQ
             {
                 if (ReceiverChannel != null)
                     await ReceiverChannel.CloseAsync(cancellationToken: cancellationToken);
-                if(Connection != null)
+                if (Connection != null)
                     await Connection.CloseAsync(cancellationToken: cancellationToken);
             }
             catch (ChannelClosedException ex)
@@ -143,7 +134,7 @@ namespace SenseNet.Messaging.RabbitMQ
                     _logger.LogTrace("RMQ: Empty message body.");
                     return;
                 }
-                
+
                 if (messageBody is MemoryStream ms)
                 {
                     body = ms.ToArray();
@@ -160,7 +151,7 @@ namespace SenseNet.Messaging.RabbitMQ
             catch (Exception ex)
             {
                 _logger.LogError(ex, $"Error when converting message body to a byte array. {ex.Message}");
-                return;
+                throw;
             }
 
             // Create a channel per send request to avoid sharing channels 
@@ -171,11 +162,11 @@ namespace SenseNet.Messaging.RabbitMQ
 
                 await using var channel = await OpenChannelAsync(Connection, cancel);
                 await channel.BasicPublishAsync(_options.MessageExchange, string.Empty, body, cancellationToken: cancel);
-                await channel.CloseAsync(cancel);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, $"Error when sending message on RabbitMq channel: {ex.Message}");
+                throw;
             }
         }
 
@@ -187,6 +178,12 @@ namespace SenseNet.Messaging.RabbitMQ
             {
                 _logger.LogError("RabbitMq connection is null.");
                 throw new ArgumentNullException(nameof(connection));
+            }
+
+            if (!connection.IsOpen)
+            {
+                _logger.LogError("RabbitMq connection is not open.");
+                throw new InvalidOperationException("Cannot create channel on closed connection");
             }
 
             var channel = await connection.CreateChannelAsync(cancellationToken: cancel);
